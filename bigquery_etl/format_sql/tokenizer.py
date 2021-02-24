@@ -272,11 +272,19 @@ class SpaceBeforeBracketKeyword(ReservedKeyword):
     pattern = _keyword_pattern(["IN", r"\* EXCEPT", r"\* REPLACE", "NOT", "OVER"])
 
 
-class BlockKeyword(ReservedKeyword):
-    """Keyword that separates indented blocks, such as conditionals."""
+class BlockToken(Token):
+    """Token that separates indented blocks, such as conditionals."""
 
 
-class BlockStartKeyword(BlockKeyword):
+class BlockStart(BlockToken):
+    """Start of a new indent."""
+
+
+class BlockEnd(BlockToken):
+    """End of a block scope."""
+
+
+class BlockStartKeyword(BlockStart, ReservedKeyword):
     """Keyword that gets its own line followed by increased indent."""
 
     pattern = _keyword_pattern(
@@ -293,7 +301,7 @@ class BlockStartKeyword(BlockKeyword):
     )
 
 
-class BlockEndKeyword(BlockKeyword):
+class BlockEndKeyword(BlockEnd, ReservedKeyword):
     """Keyword that gets its own line preceded by decreased indent."""
 
     pattern = _keyword_pattern(["END( (WHILE|LOOP|IF))?"])
@@ -425,6 +433,52 @@ class FieldAccessOperator(Operator):
     pattern = re.compile(r"\.")
 
 
+class JinjaExpression(Identifier):
+    """Template variable.
+
+    An expression is denoted by double curly braces e.g. `{{ param }}`.
+    """
+
+    pattern = re.compile(r"{{.*}}")
+
+
+class JinjaStatementLine(Token):
+    """Jinja statement that occurs in a single block."""
+
+    pattern = re.compile(r"{%\s*(include|set).*%}", re.IGNORECASE)
+
+
+class JinjaStatementStart(BlockStart):
+    """Jinja expression that gets its own line followed by increased indent."""
+
+    pattern = re.compile(
+        r"{%\s*(for|if|macro|call|filter|block|raw).*%}", re.IGNORECASE
+    )
+
+
+class JinjaStatementEnd(BlockEnd):
+    """Jinja expression that gets its own line preceded by decreased indent."""
+
+    pattern = re.compile(r"{%\s*end.*%}", re.IGNORECASE)
+
+
+class JinjaStatementMiddle(JinjaStatementStart, JinjaStatementEnd):
+    """Template control flow.
+
+    ```
+    -- Jinja2, trailing comma
+    SELECT
+        {% for column in column_list %}
+            {{ column }} AS prefixed_{{ column }},
+        {% endfor %}
+    FROM
+        {{ table }}
+    ```
+    """
+
+    pattern = re.compile(r"{%\s*(else).*%}")
+
+
 BIGQUERY_TOKEN_PRIORITY = [
     LineComment,
     BlockComment,
@@ -438,6 +492,11 @@ BIGQUERY_TOKEN_PRIORITY = [
     AngleBracketKeyword,
     SpaceBeforeBracketKeyword,
     ReservedKeyword,
+    JinjaStatementLine,
+    JinjaStatementMiddle,
+    JinjaStatementStart,
+    JinjaStatementEnd,
+    JinjaExpression,
     Literal,
     Identifier,
     OpeningBracket,
